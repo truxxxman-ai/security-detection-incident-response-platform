@@ -5,6 +5,23 @@ A lightweight Security Operations Center (SOC) platform built in a virtual lab e
 The platform collects security telemetry from **Suricata, Zeek, Linux SSH logs, and Nginx**, normalises events into a unified alert format, detects suspicious behaviour using Python-based detection logic, correlates alerts into security incidents, calculates risk scores, reconstructs multi-stage attack chains, and displays the results through a Streamlit SOC dashboard.
 
 ---
+## Project Demo
+
+### Dashboard Overview
+
+![Dashboard Overview](docs/screenshots/dashboard-overview.png)
+
+### Incident Table
+
+![Incident Table](docs/screenshots/incident-table.png)
+
+### Attack Chain
+
+![Attack Chain Part 1](docs/screenshots/attack-chain-1.png)
+
+![Attack Chain Part 2](docs/screenshots/attack-chain-2.png)
+
+![Attack Chain Part 3](docs/screenshots/attack-chain-3.png)
 
 ## 1. Project Overview
 
