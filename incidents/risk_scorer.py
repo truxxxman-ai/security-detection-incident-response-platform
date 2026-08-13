@@ -1,70 +1,148 @@
-import sys
-import os
+# =========================================================
+# Risk Scoring Engine
+# =========================================================
 
-sys.path.append(
-    os.path.dirname(
-        os.path.dirname(os.path.abspath(__file__))
+
+ATTACK_SCORES = {
+    "PORT_SCAN": 20,
+    "SSH_BRUTEFORCE": 40,
+    "WEB_ENUMERATION": 25,
+    "SQL_INJECTION": 55
+}
+
+
+SEVERITY_SCORES = {
+    "LOW": 5,
+    "MEDIUM": 10,
+    "HIGH": 15,
+    "CRITICAL": 25
+}
+
+
+CONFIDENCE_SCORES = {
+    "LOW": 0,
+    "MEDIUM": 5,
+    "HIGH": 15
+}
+
+
+def calculate_alert_volume_score(
+    alert_count
+):
+
+    """
+    Alert volume contributes to risk,
+    but is deliberately capped so that
+    noisy IDS alerts do not dominate
+    the total risk score.
+    """
+
+    if alert_count >= 100:
+        return 10
+
+    elif alert_count >= 50:
+        return 8
+
+    elif alert_count >= 20:
+        return 6
+
+    elif alert_count >= 5:
+        return 3
+
+    return 0
+
+
+def calculate_risk_score(
+    incident
+):
+
+    attack_type = incident.get(
+        "attack_type",
+        ""
     )
-)
 
-from incidents.alert_collector import collect_alerts
-from incidents.alert_deduplicator import deduplicate_alerts
-
-
-def calculate_risk_score(incident):
-    score = 0
-
-    # 1. 攻击类型基础分
-    attack_scores = {
-        "PORT_SCAN": 30,
-        "SSH_BRUTEFORCE": 45,
-        "WEB_ENUMERATION": 35,
-        "SQL_INJECTION": 60
-    }
-
-    score += attack_scores.get(
-        incident["attack_type"],
-        20
+    severity = incident.get(
+        "severity",
+        "LOW"
     )
 
-    # 2. 严重程度
-    severity_scores = {
-        "LOW": 5,
-        "MEDIUM": 10,
-        "HIGH": 20,
-        "CRITICAL": 30
-    }
+    confidence = incident.get(
+        "confidence",
+        "LOW"
+    )
 
-    score += severity_scores.get(
-        incident["severity"],
+    alert_count = incident.get(
+        "alert_count",
+        incident.get(
+            "raw_alert_count",
+            1
+        )
+    )
+
+
+    # =====================================================
+    # Attack-type score
+    # =====================================================
+
+    attack_score = ATTACK_SCORES.get(
+        attack_type,
+        10
+    )
+
+
+    # =====================================================
+    # Severity score
+    # =====================================================
+
+    severity_score = SEVERITY_SCORES.get(
+        severity,
+        5
+    )
+
+
+    # =====================================================
+    # Confidence score
+    # =====================================================
+
+    confidence_score = CONFIDENCE_SCORES.get(
+        confidence,
         0
     )
 
-    # 3. 多个检测来源同时发现
-    if incident["confidence"] == "HIGH":
-        score += 20
-    elif incident["confidence"] == "MEDIUM":
-        score += 10
 
-    # 4. 原始告警数量
-    alert_count = incident["alert_count"]
+    # =====================================================
+    # Alert volume score
+    # =====================================================
 
-    if alert_count >= 100:
-        score += 20
-    elif alert_count >= 50:
-        score += 15
-    elif alert_count >= 20:
-        score += 10
-    elif alert_count >= 5:
-        score += 5
-
-    # 最大不超过100
-    score = min(score, 100)
-
-    return score
+    volume_score = calculate_alert_volume_score(
+        alert_count
+    )
 
 
-def get_risk_level(score):
+    # =====================================================
+    # Final score
+    # =====================================================
+
+    total_score = (
+        attack_score
+        +
+        severity_score
+        +
+        confidence_score
+        +
+        volume_score
+    )
+
+
+    return min(
+        total_score,
+        100
+    )
+
+
+def get_risk_level(
+    score
+):
 
     if score >= 80:
         return "CRITICAL"
@@ -75,70 +153,37 @@ def get_risk_level(score):
     elif score >= 40:
         return "MEDIUM"
 
-    else:
-        return "LOW"
+    return "LOW"
 
 
-if __name__ == "__main__":
+def score_incident(
+    incident
+):
 
-    alerts = collect_alerts()
+    score = calculate_risk_score(
+        incident
+    )
 
-    incidents = deduplicate_alerts(alerts)
+    incident[
+        "risk_score"
+    ] = score
 
-    print("=" * 65)
-    print("SECURITY INCIDENT RISK ASSESSMENT")
-    print("=" * 65)
+    incident[
+        "risk_level"
+    ] = get_risk_level(
+        score
+    )
 
-    for incident in incidents:
+    return incident
 
-        score = calculate_risk_score(
+
+def score_incidents(
+    incidents
+):
+
+    return [
+        score_incident(
             incident
         )
-
-        level = get_risk_level(
-            score
-        )
-
-        print()
-
-        print(
-            f"Attack:       "
-            f"{incident['attack_type']}"
-        )
-
-        print(
-            f"Source IP:    "
-            f"{incident['source_ip']}"
-        )
-
-        print(
-            f"Target IP:    "
-            f"{incident['destination_ip']}"
-        )
-
-        print(
-            f"Evidence:     "
-            f"{', '.join(incident['sources'])}"
-        )
-
-        print(
-            f"Raw Alerts:   "
-            f"{incident['alert_count']}"
-        )
-
-        print(
-            f"Confidence:   "
-            f"{incident['confidence']}"
-        )
-
-        print(
-            f"Risk Score:   "
-            f"{score}/100"
-        )
-
-        print(
-            f"Risk Level:   "
-            f"{level}"
-        )
-
-        print("-" * 65)
+        for incident in incidents
+    ]
